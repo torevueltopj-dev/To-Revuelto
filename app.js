@@ -1,115 +1,96 @@
-const API_KEY = "sk-4b86a3227a434a7ca0a2f5441b1e3df8";
+// 💡 PON TU API AQUÍ
+const API_KEY = "AIzaSyArz0HOBHd8XB73KegLzG-NGxt5vbl-z0o";
 
-async function procesar() {
-    const modo = document.getElementById("mode").value;
-    const input = document.getElementById("input").value.trim();
-    const respuesta = document.getElementById("respuesta");
+// CHAT ELEMENTS
+const chat = document.getElementById("chat");
+const input = document.getElementById("userInput");
+const sendBtn = document.getElementById("sendBtn");
 
-    if (!input) {
-        respuesta.innerHTML = "⚠️ Escribe algo primero.";
-        return;
-    }
+// 📌 FUNCIONES MUN
+function generarPromptMUN(text) {
+    return `
+Eres una IA diplomática especializada en Modelo de Naciones Unidas.
 
-    respuesta.innerHTML = "Procesando…";
+Funciones integradas:
 
-    let prompt = "";
+1. **Búsqueda diplomática:**  
+   - Usa solo fuentes .org, .gov, .int o de la ONU.  
+   - Devuelve 3 enlaces confiables ordenados por fecha (reciente → antiguo)  
+   - Un párrafo diplomático por enlace.
 
-    // 🟦 1. BÚSQUEDA DIPLOMÁTICA
-    if (modo === "busqueda") {
-        prompt = `
-Eres una IA diplomática para delegados de Modelo de Naciones Unidas.
+2. **Interpelación MUN:**  
+   - Habla SIEMPRE en tercera persona.  
+   - Ejemplo: "La delegación de To' Revuelto se cuestiona…"  
+   - Sé crítico y analiza cada línea.
 
-Objetivo: ofrecer enlaces confiables (.org, .gov, .int o de la ONU)
-sobre el siguiente tema, en orden del más reciente al más antiguo.
+3. **Corrección de discursos:**  
+   - Debes corregir siguiendo:  
+     a) Introducción global  
+     b) Desarrollo nacional  
+     c) Conclusión internacional con propuestas  
 
-Tras cada enlace, da un breve párrafo diplomático describiendo su relevancia.
+4. **Desglose de tópico:**  
+   - Preguntas clave  
+   - Subtemas  
+   - Líneas diplomáticas  
 
-Tema: ${input}
-        `;
-    }
+5. **Corrección de position paper:**  
+   - 500-800 palabras  
+   - Tópico, Comisión, Delegación, Delegado  
+   - Bibliografía válida  
+   - Tono diplomático
 
-    // 🟩 2. INTERPELACIÓN MUN
-    if (modo === "interpelacion") {
-        prompt = `
-Actúa como un delegado crítico en un Modelo de Naciones Unidas.
-Habla SIEMPRE en tercera persona.
-Ejemplos:
-- "La delegación de To' Revuelto se cuestiona…"
-- "La delegación observa con preocupación…"
+👉 Entrada del usuario:
+${text}
+`;
+}
 
-Interpela, cuestiona y analiza cada afirmación del discurso:
 
-"${input}"
-        `;
-    }
+// 📌 FUNCIÓN PARA AÑADIR MENSAJES AL CHAT
+function addMessage(text, sender) {
+    const msg = document.createElement("div");
+    msg.classList.add("message", sender);
+    msg.textContent = text;
+    chat.appendChild(msg);
+    chat.scrollTop = chat.scrollHeight;
+}
 
-    // 🟨 3. CORRECCIÓN DE DISCURSOS
-    if (modo === "correccion") {
-        prompt = `
-Corrige este discurso respetando la estructura MUN:
-1. Introducción global
-2. Desarrollo nacional
-3. Conclusión internacional con propuestas
 
-Mejorar diplomacia, coherencia y estructura.
+// 📌 LLAMADA A GEMINI
+async function enviarPrompt() {
+    const texto = input.value.trim();
+    if (!texto) return;
 
-Discurso:
-"${input}"
-        `;
-    }
+    addMessage(texto, "user");
+    input.value = "";
 
-    // 🟧 4. DESGLOSE DE TÓPICO
-    if (modo === "desglose") {
-        prompt = `
-Desglosa el siguiente tópico para que un delegado investigue
-y pueda redactar un discurso o position paper.
-
-Incluye:
-- Preguntas clave
-- Subtemas
-- Líneas de investigación diplomática
-
-Tópico: ${input}
-        `;
-    }
-
-    // 🟥 5. CORRECCIÓN DE POSITION PAPER
-    if (modo === "documento") {
-        prompt = `
-Corrige este Position Paper según estándares MUN:
-
-Debe tener:
-- 500 a 800 palabras
-- Campos: Tópico, Comisión, Delegación, Delegado
-- Desarrollo tipo discurso
-- Bibliografía válida
-- Tono diplomático
-
-Texto del PP:
-"${input}"
-        `;
-    }
+    addMessage("Procesando…", "ai");
 
     try {
-        const result = await fetch("https://api.deepseek.com/chat/completions", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + API_KEY
-            },
-            body: JSON.stringify({
-                model: "deepseek-chat",
-                messages: [
-                    { role: "user", content: prompt }
-                ]
-            })
-        });
+        const response = await fetch(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + API_KEY,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{ role: "user", parts: [{ text: generarPromptMUN(texto) }] }]
+                })
+            }
+        );
 
-        const data = await result.json();
-        respuesta.innerHTML = data.choices[0].message.content;
+        const data = await response.json();
+        const respuesta = data.candidates?.[0]?.content?.parts?.[0]?.text || "Error en la respuesta.";
+
+        addMessage(respuesta, "ai");
 
     } catch (e) {
-        respuesta.innerHTML = "❌ Error al conectar con DeepSeek.";
-        console.log(e);
+        addMessage("❌ Error al conectar con Gemini.", "ai");
     }
 }
+
+
+// EVENTOS
+sendBtn.addEventListener("click", enviarPrompt);
+input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") enviarPrompt();
+});
