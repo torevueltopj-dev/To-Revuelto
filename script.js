@@ -1,4 +1,4 @@
-const API_KEY = "TU_API_KEY_AQUI";
+const API_KEY = "AIzaSyArz0HOBHd8XB73KegLzG-NGxt5vbl-z0o";
 const URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + API_KEY;
 
 document.getElementById("sendBtn").addEventListener("click", sendMessage);
