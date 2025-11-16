@@ -1,4 +1,4 @@
-const API_KEY = "AQUI_TU_API_KEY_DE_DEEPSEEK";
+const API_KEY = "sk-4b86a3227a434a7ca0a2f5441b1e3df8";
 
 async function procesar() {
     const modo = document.getElementById("mode").value;
