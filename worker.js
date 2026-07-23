@@ -2310,7 +2310,7 @@ async function paginaTareaPublica(env, id, request) {
   );
 
   const botonAccion = puedeEntregar && tarea.estado === 'pendiente'
-    ? `<a href="/admin#mis-tareas" class="inline-flex px-8 py-3 rounded-full font-bold bg-brand-yellow text-black hover:scale-105 transition-all items-center gap-2">Ir a entregar mi trabajo <i class="fa-solid fa-arrow-right"></i></a>`
+    ? `<a href="/admin#tareas" class="inline-flex px-8 py-3 rounded-full font-bold bg-brand-yellow text-black hover:scale-105 transition-all items-center gap-2">Ir a entregar mi trabajo <i class="fa-solid fa-arrow-right"></i></a>`
     : !usuarioActual
     ? `<a href="/admin?volver=${encodeURIComponent('tarea/' + id)}" class="inline-flex px-8 py-3 rounded-full font-bold bg-brand-yellow text-black hover:scale-105 transition-all items-center gap-2">Iniciar sesión para entregar <i class="fa-solid fa-arrow-right-to-bracket"></i></a>`
     : usuarioActual && !puedeEntregar
@@ -3081,12 +3081,23 @@ const TABS_JS = {
         cont.innerHTML = '';
         let portadaRecortada = null;
         let tareaArticuloActiva = null;
+        let tareasArticuloPendientes = [];
         const dataTareas = await apiGet('/admin/api/mis-tareas');
         if (dataTareas.ok) {
-            tareaArticuloActiva = (dataTareas.tareas || []).find(t => (t.tipo === 'articulo' || t.tipo === 'redaccion') && (t.mi_estado === 'pendiente' || t.disponible_para_tomar) && t.estado !== 'publicada');
+            tareasArticuloPendientes = (dataTareas.tareas || []).filter(t => (t.tipo === 'articulo' || t.tipo === 'redaccion') && (t.mi_estado === 'pendiente' || t.disponible_para_tomar) && t.estado !== 'publicada');
         }
-        const encabezado = el('<div class="flex flex-col md:flex-row md:items-center justify-between gap-4"><h2 class="font-display text-2xl font-bold text-white">Mis Artículos</h2>' + (tareaArticuloActiva ? '<button id="btn-nuevo-articulo" class="px-5 py-2 rounded-full font-bold bg-brand-yellow text-black text-sm">Redactar: ' + tareaArticuloActiva.titulo + '</button>' : '<span class="text-gray-500 text-sm">No tienes ningún artículo asignado por redactar</span>') + '</div>');
-        cont.appendChild(encabezado);
+        cont.appendChild(el('<h2 class="font-display text-2xl font-bold text-white">Mis Artículos</h2>'));
+
+        const pendientesBox = el('<div id="lista-articulos-pendientes" class="space-y-3"></div>');
+        cont.appendChild(pendientesBox);
+        if (!tareasArticuloPendientes.length) {
+            pendientesBox.appendChild(el('<div class="ultra-glass p-6 text-gray-500 text-sm">No tienes ningún artículo asignado por redactar.</div>'));
+        } else {
+            tareasArticuloPendientes.forEach(t => {
+                const tarjeta = el('<div class="ultra-glass p-5 flex flex-col md:flex-row md:items-center justify-between gap-3"><div><p class="text-white font-bold">' + t.titulo + '</p><p class="text-gray-400 text-xs">' + (t.descripcion || '') + '</p></div><button class="btn-redactar-articulo px-5 py-2 rounded-full font-bold bg-brand-yellow text-black text-sm whitespace-nowrap" data-id="' + t.id + '">Redactar</button></div>');
+                pendientesBox.appendChild(tarjeta);
+            });
+        }
 
         const formBox = el('<div id="form-articulo-box" class="ultra-glass p-6 hidden"></div>');
         formBox.innerHTML = \`
@@ -3146,8 +3157,14 @@ const TABS_JS = {
             formBox.querySelector('#contador-palabras').textContent = palabras;
         });
 
-        const btnNuevoArticulo = document.getElementById('btn-nuevo-articulo');
-        if (btnNuevoArticulo) btnNuevoArticulo.addEventListener('click', () => formBox.classList.toggle('hidden'));
+        pendientesBox.querySelectorAll('.btn-redactar-articulo').forEach(btn => {
+            btn.addEventListener('click', () => {
+                tareaArticuloActiva = tareasArticuloPendientes.find(t => String(t.id) === btn.dataset.id) || null;
+                formBox.querySelector('h3').textContent = tareaArticuloActiva ? ('Redactar: ' + tareaArticuloActiva.titulo) : 'Nuevo artículo';
+                formBox.classList.remove('hidden');
+                formBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
         formBox.querySelector('#btn-cancelar-articulo').addEventListener('click', () => formBox.classList.add('hidden'));
 
         formBox.querySelector('#form-articulo').addEventListener('submit', async (e) => {
@@ -3160,7 +3177,7 @@ const TABS_JS = {
             let datos = new FormData(e.target);
             datos.append('cuerpo_html', editor.innerHTML);
             const resultado = await apiPost('/admin/api/tareas-difusion/' + tareaArticuloActiva.id + '/enviar-articulo', datos, true);
-            if (resultado.ok) { mostrarToast('Redacción enviada, esperando asignación de portada', 'exito'); formBox.classList.add('hidden'); e.target.reset(); editor.innerHTML=''; cargarLista(); }
+            if (resultado.ok) { mostrarToast('Redacción enviada, esperando asignación de portada', 'exito'); formBox.classList.add('hidden'); e.target.reset(); editor.innerHTML=''; render(cont); }
             else { mostrarToast(resultado.error || 'Error al enviar', 'error'); }
         });
 
@@ -3414,7 +3431,7 @@ tareas: () => `
                 if (!data.ok || !data.tareas.length) { lista.appendChild(el('<div class="p-6 text-center text-gray-400 text-sm">No hay tareas en este estado.</div>')); return; }
                 data.tareas.forEach(t => {
                     lista.appendChild(el(\`<div class="p-4 rounded-xl bg-white/5 flex items-center justify-between gap-3">
-                        <div><p class="text-white text-sm font-bold">\${t.titulo}</p><p class="text-gray-400 text-xs">\${nombreTipoTarea(t.tipo)} · \${t.asignado_a_username || 'sin asignar'}</p></div>
+                        <div><p class="text-white text-sm font-bold">\${t.titulo}</p><p class="text-gray-400 text-xs">\${nombreTipoTarea(t.tipo)} · \${t.asignado_nombre_completo || 'sin asignar'}</p></div>
                         <button class="btn-eliminar-gestor px-4 py-2 rounded-xl font-bold bg-red-900/40 text-red-200 text-xs" data-id="\${t.id}">Eliminar</button>
                     </div>\`));
                 });
@@ -5262,9 +5279,22 @@ async function manejarApiAdmin(request, env, usuario, path) {
       if (!miembrosParaTodos.length) return errorResponse('No hay voluntarios activos para asignar esta tarea.');
     }
 
+    // Los artículos/redacciones se entregan en una sola versión: si la tarea es grupal,
+    // el primer integrante queda como responsable único de redactar en vez de que cada
+    // quien redacte su propia versión por separado.
+    const esEntregaUnica = (tipo === 'articulo' || tipo === 'redaccion');
+    let responsableUnicoGrupo = null;
+    let miembrosGrupoFinal = miembros_grupo;
+    let asignadoFinal = asignado_a_username;
+    if (esEntregaUnica && miembros_grupo.length) {
+      responsableUnicoGrupo = miembros_grupo[0];
+      asignadoFinal = responsableUnicoGrupo;
+      miembrosGrupoFinal = [];
+    }
+
     const insercionTarea = await env.DB.prepare(
       `INSERT INTO tareas_difusion (tipo, titulo, descripcion, asignado_a_username, estado, creado_por) VALUES (?, ?, ?, ?, 'pendiente', ?)`
-    ).bind(tipo, titulo, descripcion || null, asignado_a_username, usuario.username).run();
+    ).bind(tipo, titulo, descripcion || null, asignadoFinal, usuario.username).run();
 
     const idTareaNueva = insercionTarea.meta.last_row_id;
     const enlaceTarea = `${String(env.PUBLIC_SITE_URL || '').replace(/\/$/, '')}/tarea/${idTareaNueva}`;
@@ -5286,8 +5316,22 @@ async function manejarApiAdmin(request, env, usuario, path) {
           'tarea_difusion', idTareaNueva
         );
       }
-    } else if (miembros_grupo.length) {
+    } else if (responsableUnicoGrupo) {
+      await notificarTareaPorWhatsapp(
+        env, responsableUnicoGrupo,
+        `To' Revuelto: nueva tarea grupal de ${tipo} — "${titulo}". Fuiste asignado/a como responsable de entregarla. Míralo aquí: ${enlaceTarea}`,
+        'tarea_difusion', idTareaNueva
+      );
       for (const m of miembros_grupo) {
+        if (m === responsableUnicoGrupo) continue;
+        await notificarTareaPorWhatsapp(
+          env, m,
+          `To' Revuelto: nueva tarea grupal de ${tipo} — "${titulo}". El grupo la trabajará junto a ${responsableUnicoGrupo}, quien la entregará. Míralo aquí: ${enlaceTarea}`,
+          'tarea_difusion', idTareaNueva
+        );
+      }
+    } else if (miembrosGrupoFinal.length) {
+      for (const m of miembrosGrupoFinal) {
         await env.DB.prepare(
           `INSERT INTO tareas_difusion_miembros (tarea_id, username) VALUES (?, ?)`
         ).bind(idTareaNueva, m).run();
@@ -5297,9 +5341,9 @@ async function manejarApiAdmin(request, env, usuario, path) {
           'tarea_difusion', idTareaNueva
         );
       }
-    } else if (asignado_a_username) {
+    } else if (asignadoFinal) {
       await notificarTareaPorWhatsapp(
-        env, asignado_a_username,
+        env, asignadoFinal,
         `To' Revuelto: nueva tarea de ${tipo} — "${titulo}". Míralo aquí: ${enlaceTarea}`,
         'tarea_difusion', idTareaNueva
       );
@@ -5368,22 +5412,40 @@ async function manejarApiAdmin(request, env, usuario, path) {
         const entregas = await env.DB.prepare(
           `SELECT * FROM tareas_difusion_entregas WHERE tarea_id = ? AND estado = ? ORDER BY creado_en ASC`
         ).bind(t.id, estado).all();
-        for (const entrega of (entregas.results || [])) {
-          const asignado = await obtenerUsuario(env, entrega.username);
+        if ((entregas.results || []).length) {
+          for (const entrega of entregas.results) {
+            const asignado = await obtenerUsuario(env, entrega.username);
+            conUrl.push({
+              ...t,
+              entrega_id: entrega.id,
+              asignado_a_username: entrega.username,
+              asignado_nombre_completo: asignado ? asignado.nombre_completo : entrega.username,
+              archivo_key: entrega.archivo_key,
+              archivo_url: urlPublicaR2(env, entrega.archivo_key),
+              asignado_foto_url: asignado ? urlPublicaR2(env, asignado.foto_key) : null,
+              es_todos: !t.asignado_a_username,
+              es_grupal: true,
+            });
+          }
+        } else if (t.estado === estado) {
           conUrl.push({
             ...t,
-            entrega_id: entrega.id,
-            asignado_a_username: entrega.username,
-            archivo_key: entrega.archivo_key,
-            archivo_url: urlPublicaR2(env, entrega.archivo_key),
-            asignado_foto_url: asignado ? urlPublicaR2(env, asignado.foto_key) : null,
+            archivo_url: urlPublicaR2(env, t.archivo_key),
+            asignado_foto_url: null,
             es_todos: !t.asignado_a_username,
             es_grupal: true,
           });
         }
       } else {
         const asignado = t.asignado_a_username ? await obtenerUsuario(env, t.asignado_a_username) : null;
-        conUrl.push({ ...t, archivo_url: urlPublicaR2(env, t.archivo_key), asignado_foto_url: asignado ? urlPublicaR2(env, asignado.foto_key) : null });
+        const portadaAsignado = t.portada_asignado_a_username ? await obtenerUsuario(env, t.portada_asignado_a_username) : null;
+        conUrl.push({
+          ...t,
+          asignado_nombre_completo: asignado ? asignado.nombre_completo : (t.asignado_a_username || null),
+          portada_asignado_nombre_completo: portadaAsignado ? portadaAsignado.nombre_completo : (t.portada_asignado_a_username || null),
+          archivo_url: urlPublicaR2(env, t.archivo_key),
+          asignado_foto_url: asignado ? urlPublicaR2(env, asignado.foto_key) : null,
+        });
       }
     }
     return jsonResponse({ ok: true, tareas: conUrl });
